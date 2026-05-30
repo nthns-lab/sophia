@@ -73,11 +73,12 @@ python3 -m teamlead --real --thinker anthropic --goal "..."  # SDK 쓰려면: pi
 
 ## 상태
 
-동작하는 코어 + **62개 테스트 통과**. **`--real` 전체 경로가 pip 없이 end-to-end 라이브 검증됨**
-(thinker=claude-cli → 전제 도출 → 실제 claude 일꾼 병렬 → 5문장 보고 → handoff done).
+동작하는 코어 + **67개 테스트 통과**. **`--real` 전체 경로가 pip 없이 end-to-end 라이브 검증됨**
+(thinker=claude-cli → 전제 도출 → 실제 claude 일꾼 병렬 → 5문장 보고 → handoff done),
+**실제 claude 세션 연동 라이브 데모 성공**(격리 worktree에서 fizzbuzz.py 생성·artifacts 포착·5문장 보고 영속).
 실구현 완료: 전제엔진, 디렉터(idle 자가과업·monitor 라운드로빈), 리포터(5문장 게이트),
 핸드오프 흡수, 스케줄러(6h 루프·예외내성), claude_code/codex 어댑터, git worktree 격리,
-artifacts 추출, ClaudeCliThinker(pip 불필요), **보고 영속성(handoff.json `reports[]`)**.
+artifacts 추출, ClaudeCliThinker(pip 불필요), 보고 영속성, **resume(재시작 이어가기)**.
 
 > **이 산출물의 가치(한 문장)**: 사람이 큰 목표 한 줄만 주면, 여러 전제로 갈라 실제
 > claude/codex 일꾼에게 병렬 위임하고, pip 설치 없이 돌아가, 끝나면 "무엇을 전제로

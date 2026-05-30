@@ -60,7 +60,8 @@ def _build_thinker(name: str):
     return ClaudeCliThinker()
 
 
-def build_real(goal: str, backend_name: str = "claude", thinker_name: str = "claude-cli") -> Scheduler:
+def build_real(goal: str, backend_name: str = "claude", thinker_name: str = "claude-cli",
+               resume: bool = False) -> Scheduler:
     if backend_name == "codex":
         from .adapters.codex.adapter import CodexBackend
 
@@ -77,7 +78,9 @@ def build_real(goal: str, backend_name: str = "claude", thinker_name: str = "cla
         thinker=_build_thinker(thinker_name),
         goal=goal,
         session_id="run",
-        pending_requests=[goal],
+        # resume 시엔 caller 큐를 비워 이전 handoff 의 미완료 큐를 복원하게 한다.
+        pending_requests=[] if resume else [goal],
+        resume=resume,
     )
 
 

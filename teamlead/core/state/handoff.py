@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -39,6 +39,8 @@ class Handoff:
     # 사용자 대면 5문장 보고의 영속 기록. 6h 후 돌아온 사용자가 "무엇을 전제로
     # 했는지"를 실제로 읽을 수 있게 한다(stdout 휘발 방지). [{at, text}]
     reports: list[dict[str, Any]] = field(default_factory=list)
+    # 아직 처리 못 한 요청 큐. 재시작(resume) 시 이어가기 위해 저장한다.
+    pending_requests: list[str] = field(default_factory=list)
     # 6h 무인 실행에서 무한증가(메모리 누수) 방지용 상한. 오래된 것부터 버린다.
     max_items: int = 500
 
@@ -82,4 +84,7 @@ class Handoff:
     def load(cls, path: str | Path) -> "Handoff":
         data = json.loads(Path(path).read_text(encoding="utf-8"))
         data["decisions"] = [Decision(**d) for d in data.get("decisions", [])]
+        # 스키마 진화에 견고하게: 알 수 없는 키는 버린다(구/신 버전 호환).
+        known = {f.name for f in fields(cls)}
+        data = {k: v for k, v in data.items() if k in known}
         return cls(**data)
