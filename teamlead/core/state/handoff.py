@@ -1,0 +1,85 @@
+"""세션 핸드오프 — 콜드패스에서 1회 증류 → 다음 세션의 안정 prefix.
+
+활성 세션(핫패스)에서는 건드리지 않는다. 세션 경계/주기적으로만 저장.
+일꾼 WorkResult 도 같은 모양(decisions/artifacts)이라 변환 없이 흡수된다.
+"""
+from __future__ import annotations
+
+import json
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ..manager.premise import PremiseOutcome
+
+
+@dataclass
+class Decision:
+    id: str
+    statement: str
+    why: str = ""
+    scope: str = "durable"  # durable | session
+    supersedes: str | None = None
+
+
+@dataclass
+class Handoff:
+    session_id: str
+    summary: str = ""
+    goal: str = ""
+    status: str = "in_progress"  # in_progress | blocked | done
+    next_action: str = ""
+    decisions: list[Decision] = field(default_factory=list)
+    constraints: list[str] = field(default_factory=list)
+    artifacts: list[dict[str, Any]] = field(default_factory=list)
+    open_questions: list[str] = field(default_factory=list)
+    glossary: dict[str, str] = field(default_factory=dict)
+    discarded: list[dict[str, str]] = field(default_factory=list)
+    # 사용자 대면 5문장 보고의 영속 기록. 6h 후 돌아온 사용자가 "무엇을 전제로
+    # 했는지"를 실제로 읽을 수 있게 한다(stdout 휘발 방지). [{at, text}]
+    reports: list[dict[str, Any]] = field(default_factory=list)
+    # 6h 무인 실행에서 무한증가(메모리 누수) 방지용 상한. 오래된 것부터 버린다.
+    max_items: int = 500
+
+    def add_report(self, text: str, at: float | None = None) -> None:
+        """사용자 대면 보고를 영속 기록에 추가."""
+        self.reports.append({"at": at, "text": text})
+        self.reports = self.reports[-self.max_items:]
+
+    def absorb(self, outcomes: "list[PremiseOutcome]") -> None:
+        """전제 결과를 흡수: 성공→decisions, 실패→discarded(재시도 방지), artifacts 누적."""
+        for o in outcomes:
+            if o.result.ok:
+                self.decisions.append(
+                    Decision(
+                        id=o.premise.id,
+                        statement=o.premise.statement,
+                        why=o.result.summary,
+                    )
+                )
+            else:
+                self.discarded.append(
+                    {"what": o.premise.statement, "why": o.result.summary}
+                )
+            self.artifacts.extend(o.result.artifacts)
+        self._cap()
+
+    def _cap(self) -> None:
+        """리스트가 상한을 넘으면 가장 오래된 항목부터 잘라낸다."""
+        if self.max_items and self.max_items > 0:
+            self.decisions = self.decisions[-self.max_items:]
+            self.discarded = self.discarded[-self.max_items:]
+            self.artifacts = self.artifacts[-self.max_items:]
+            self.reports = self.reports[-self.max_items:]
+
+    def save(self, path: str | Path) -> None:
+        Path(path).write_text(
+            json.dumps(asdict(self), ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+
+    @classmethod
+    def load(cls, path: str | Path) -> "Handoff":
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        data["decisions"] = [Decision(**d) for d in data.get("decisions", [])]
+        return cls(**data)

@@ -1,0 +1,18 @@
+[project]
+name = "teamlead"
+version = "0.0.1"
+description = "Claude Code 위에서 도는 중간관리자 하네스: 능동 방향설정, 전제공간 탐색, 저부하 보고."
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+# 임베딩 기반 retrieval (우리 차별 기능) 붙일 때 활성화
+retrieval = ["sentence-transformers", "sqlite-vec"]
+dev = ["pytest", "pytest-asyncio"]
+
+[project.scripts]
+teamlead = "teamlead.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
