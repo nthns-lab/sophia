@@ -61,15 +61,16 @@ def _build_thinker(name: str):
 
 
 def build_real(goal: str, backend_name: str = "claude", thinker_name: str = "claude-cli",
-               resume: bool = False) -> Scheduler:
+               resume: bool = False, base_repo: str | None = None) -> Scheduler:
+    # base_repo 가 git repo 면 전제별 worktree 격리가 engage(병렬 전제 cwd 충돌 방지).
     if backend_name == "codex":
         from .adapters.codex.adapter import CodexBackend
 
-        backend = CodexBackend()
+        backend = CodexBackend(base_repo=base_repo)
     else:
         from .adapters.claude_code.adapter import ClaudeCodeBackend
 
-        backend = ClaudeCodeBackend()
+        backend = ClaudeCodeBackend(base_repo=base_repo)
 
     director = Director(goal=goal, monitor_targets=["LLM 컨텍스트 엔지니어링"])
     return Scheduler(
@@ -92,9 +93,13 @@ def main() -> None:
     ap.add_argument("--thinker", choices=["claude-cli", "anthropic", "auto"], default="claude-cli",
                     help="관리자 메타인지 백엔드. claude-cli=pip 불필요(기본), anthropic=SDK 필요")
     ap.add_argument("--goal", default="데모 목표: 무언가를 만든다")
+    ap.add_argument("--resume", action="store_true",
+                    help="기존 handoff.json 을 읽어 이어간다(같은 goal 일 때 기록·미완료 큐 복원)")
+    ap.add_argument("--base-repo", default=None,
+                    help="git repo 경로. 주면 전제별 worktree 격리가 켜져 병렬 전제가 cwd 를 안 나눠 쓴다")
     args = ap.parse_args()
 
-    sched = (build_real(args.goal, args.backend, args.thinker)
+    sched = (build_real(args.goal, args.backend, args.thinker, args.resume, args.base_repo)
              if args.real else build_offline(args.goal))
     ho = asyncio.run(sched.run())
     print(f"\n[handoff] status={ho.status} decisions={len(ho.decisions)} discarded={len(ho.discarded)}")
