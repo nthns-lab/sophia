@@ -9,3 +9,5 @@ handoff.json
 .pytest_cache/
 build/
 dist/
+
+reports.log
