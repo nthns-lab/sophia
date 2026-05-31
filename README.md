@@ -123,18 +123,34 @@ sophia/
 
 ### 설치 (claude 와 같은 방식 — 환경변수 0개)
 
+**한 줄 설치** (macOS·Linux, zsh·bash 무관 — `| bash` 라 셸과 독립):
+
 ```bash
-git clone <repo> sophia && cd sophia
-./install.sh          # ~/.local/share/sophia 에 설치 + ~/.local/bin/sophia 런처
-# 이후 어디서나:
+curl -fsSL https://raw.githubusercontent.com/nthns-lab/sophia/main/install.sh | bash
+```
+
+또는 레포에서 직접:
+
+```bash
+git clone https://github.com/nthns-lab/sophia && cd sophia
+./install.sh          # ~/.local/share/sophia 설치 + ~/.local/bin/sophia 런처
+```
+
+설치 후 어디서나:
+
+```bash
 sophia --goal "무언가를 만든다"     # 오프라인 데모 (키 불필요)
 sophia tui                          # 포트폴리오 대시보드 (TUI)
 sophia --real --goal "..."          # 실제 claude 일꾼에 위임
-# 제거: ./install.sh --uninstall
+# 제거: sophia 가 깐 것 되돌리기 →  ./install.sh --uninstall
 ```
 
-pip 불필요(순수 표준 라이브러리). `~/.local/bin` 이 PATH 에 없으면 install.sh 가 안내한다.
-claude/codex CLI 가 PATH 에 있으면 `--real` 로 실제 위임이 켜진다(추가 설정 없음).
+pip·node 불필요(순수 표준 라이브러리, python3 3.11+ 만). claude/codex CLI 가 PATH 에
+있으면 `--real` 로 실제 위임이 켜진다(추가 설정 없음). macOS 는 `~/.local/bin` 이 기본
+PATH 에 없을 수 있는데, 그럴 때 install.sh 가 쓰는 셸(zsh/bash)에 맞춰 안내한다.
+
+> Homebrew(`brew install`) 배포는 수요가 생기면 tap 으로 추가 예정 — 지금은 위
+> curl 한 줄로 충분하다.
 
 ### 개발 중 실행 (레포에서 직접)
 
