@@ -100,33 +100,100 @@ def build_real(goal: str, backend_name: str = "claude", thinker_name: str = "cla
     )
 
 
-def main() -> None:
-    # 서브커맨드: `sophia tui` → 포트폴리오 대시보드 TUI (claude 없이 fake 데모)
-    if len(sys.argv) > 1 and sys.argv[1] == "tui":
-        from .ui.tui import main as tui_main
-        tui_main()
-        return
+WELCOME = """\
+SOPHIA — a manager-layer agent harness.
 
-    ap = argparse.ArgumentParser(prog="sophia")
-    ap.add_argument("--real", action="store_true", help="실제 일꾼 백엔드 + Anthropic 사용")
-    ap.add_argument("--backend", choices=["claude", "codex"], default="claude",
-                    help="--real 일 때 일꾼 백엔드 선택 (포트가 같아 교체만 하면 됨)")
-    ap.add_argument("--thinker", choices=["claude-cli", "anthropic", "auto"], default="claude-cli",
-                    help="관리자 메타인지 백엔드. claude-cli=pip 불필요(기본), anthropic=SDK 필요")
-    ap.add_argument("--goal", default="데모 목표: 무언가를 만든다")
-    ap.add_argument("--resume", action="store_true",
-                    help="기존 handoff.json 을 읽어 이어간다(같은 goal 일 때 기록·미완료 큐 복원)")
-    ap.add_argument("--base-repo", default=None,
-                    help="git repo 경로. 주면 전제별 worktree 격리가 켜져 병렬 전제가 cwd 를 안 나눠 쓴다")
-    ap.add_argument("--anticipate", action="store_true",
-                    help="보고 후 회신을 기다리며 사용자 반응을 예측해 선제 작업을 미리 한다")
-    args = ap.parse_args()
+You give one goal. SOPHIA splits it into several premises, delegates each to a
+real coding agent (Claude Code / Codex) in parallel, picks a winner, and reports
+back in 5 sentences — so you manage, not micromanage.
 
+QUICK START
+  sophia demo                 Run an offline demo (no API key, no claude needed)
+  sophia tui                  Open the portfolio dashboard (TUI)
+  sophia run "<your goal>"    Delegate a real goal to claude/codex workers
+  sophia --help               Full options
+
+EXAMPLES
+  sophia run "add a caching layer to this project"
+  sophia run "build a TODO cli" --base-repo .   # isolate workers in git worktrees
+  sophia run "..." --anticipate                 # keep working while you reply
+  sophia run "..." --resume                     # continue a previous session
+
+Real delegation (`run`) needs the `claude` CLI on your PATH. The demo/tui do not.
+"""
+
+
+def _run_scheduler(args) -> None:
     sched = (build_real(args.goal, args.backend, args.thinker, args.resume,
                         args.base_repo, args.anticipate)
              if args.real else build_offline(args.goal))
     ho = asyncio.run(sched.run())
-    print(f"\n[handoff] status={ho.status} decisions={len(ho.decisions)} discarded={len(ho.discarded)}")
+    print(f"\n[handoff] status={ho.status} decisions={len(ho.decisions)} "
+          f"discarded={len(ho.discarded)}")
+
+
+def main() -> None:
+    argv = sys.argv[1:]
+
+    # 인자 없이 `sophia` → 환영 + 빠른 시작 (예전엔 데모가 곧장 돌아 혼란스러웠음)
+    if not argv:
+        print(WELCOME)
+        return
+
+    # 서브커맨드: tui / demo / run
+    cmd = argv[0]
+    if cmd == "tui":
+        from .ui.tui import main as tui_main
+        tui_main()
+        return
+    if cmd == "demo":
+        print("• Running offline demo (no API key needed)…\n")
+        _run_scheduler(_parse_args(["--goal", "Build something useful"]))
+        return
+    if cmd == "run":
+        # `sophia run "<goal>" [opts]` — goal 을 위치인자로 받는 친절한 형태
+        rest = argv[1:]
+        goal = None
+        if rest and not rest[0].startswith("-"):
+            goal, rest = rest[0], rest[1:]
+        a = _parse_args(["--real", *rest] + (["--goal", goal] if goal else []))
+        if not goal:
+            print("✗ Usage: sophia run \"<your goal>\" [--base-repo .] [--anticipate]")
+            return
+        _run_scheduler(a)
+        return
+
+    # 그 외엔 기존 플래그 파서 (sophia --real --goal ... 등 하위호환)
+    _run_scheduler(_parse_args(argv))
+
+
+def _parse_args(argv):
+    ap = argparse.ArgumentParser(
+        prog="sophia",
+        description="SOPHIA — manager-layer agent harness. "
+                    "Run `sophia` with no args for a quick start.",
+        epilog="Examples:\n"
+               "  sophia demo\n"
+               "  sophia run \"add a caching layer\" --base-repo .\n"
+               "  sophia tui\n",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    ap.add_argument("--real", action="store_true",
+                    help="delegate to a real worker backend (needs claude/codex on PATH)")
+    ap.add_argument("--backend", choices=["claude", "codex"], default="claude",
+                    help="worker backend when --real (same port, swap freely)")
+    ap.add_argument("--thinker", choices=["claude-cli", "anthropic", "auto"],
+                    default="claude-cli",
+                    help="manager-thinking backend. claude-cli=no pip (default)")
+    ap.add_argument("--goal", default="Build something useful",
+                    help="the goal to pursue")
+    ap.add_argument("--resume", action="store_true",
+                    help="continue a previous session (same goal's handoff.json)")
+    ap.add_argument("--base-repo", default=None,
+                    help="git repo path; isolates parallel premises in worktrees")
+    ap.add_argument("--anticipate", action="store_true",
+                    help="after reporting, predict your reaction and pre-do likely work")
+    return ap.parse_args(argv)
 
 
 if __name__ == "__main__":
