@@ -1,7 +1,7 @@
 import asyncio
 
-from teamlead.adapters.codex.adapter import CodexBackend
-from teamlead.ports.worker import WorkSpec
+from sophia.adapters.codex.adapter import CodexBackend
+from sophia.ports.worker import WorkSpec
 
 
 def test_missing_binary_returns_not_ok():
@@ -42,5 +42,5 @@ def test_default_timeout_not_six_hours():
 
 def test_implements_worker_port():
     # 같은 포트를 구현하는지 — core 가 claude/codex 를 구분 못 해야 한다
-    from teamlead.ports.worker import WorkerBackend
+    from sophia.ports.worker import WorkerBackend
     assert isinstance(CodexBackend(), WorkerBackend)

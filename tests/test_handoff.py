@@ -1,6 +1,6 @@
-from teamlead.core.manager.premise import Premise, PremiseOutcome
-from teamlead.core.state.handoff import Decision, Handoff
-from teamlead.ports.worker import WorkResult
+from sophia.core.manager.premise import Premise, PremiseOutcome
+from sophia.core.state.handoff import Decision, Handoff
+from sophia.ports.worker import WorkResult
 
 
 def test_roundtrip(tmp_path):

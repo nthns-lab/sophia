@@ -1,10 +1,10 @@
 import asyncio
 
-from teamlead.adapters.fake_worker import FakeWorkerBackend
-from teamlead.adapters.thinker.fake import FakeThinker
-from teamlead.core.loop.scheduler import Scheduler
-from teamlead.core.manager.director import Director
-from teamlead.core.state.handoff import Handoff
+from sophia.adapters.fake_worker import FakeWorkerBackend
+from sophia.adapters.thinker.fake import FakeThinker
+from sophia.core.loop.scheduler import Scheduler
+from sophia.core.manager.director import Director
+from sophia.core.state.handoff import Handoff
 
 from .conftest import noop_sleep, zero_clock
 

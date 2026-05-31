@@ -41,6 +41,10 @@ class Handoff:
     reports: list[dict[str, Any]] = field(default_factory=list)
     # 아직 처리 못 한 요청 큐. 재시작(resume) 시 이어가기 위해 저장한다.
     pending_requests: list[str] = field(default_factory=list)
+    # 예측(anticipation)으로 만든 선제 작업 큐. resume 시 이어가기 위해 저장.
+    speculative_requests: list[str] = field(default_factory=list)
+    # synthesis 기록: 어느 전제를 왜 채택/기각했는지. [{request, chosen, rationale, rejected, grafts}]
+    syntheses: list[dict[str, Any]] = field(default_factory=list)
     # 6h 무인 실행에서 무한증가(메모리 누수) 방지용 상한. 오래된 것부터 버린다.
     max_items: int = 500
 
@@ -67,6 +71,40 @@ class Handoff:
             self.artifacts.extend(o.result.artifacts)
         self._cap()
 
+    def absorb_with_synthesis(self, request, outcomes, syn) -> None:
+        """synthesis 적용 흡수: 채택안만 decision, 기각안은 synthesis 사유로 discarded.
+
+        그냥 absorb() 가 '성공한 전제 전부'를 decision 으로 남기는 것과 달리,
+        여기선 '관리자가 고른 하나'만 결정으로 남고 나머지는 이유와 함께 버려진다.
+        실패한 전제는 그대로 discarded. artifacts 는 traceability 위해 전부 누적.
+        """
+        ok = {o.premise.id: o for o in outcomes if o.result.ok}
+        reject_why = {r["id"]: r.get("why", "") for r in syn.rejected}
+        for o in outcomes:
+            if not o.result.ok:
+                self.discarded.append(
+                    {"what": o.premise.statement, "why": o.result.summary}
+                )
+            elif o.premise.id == syn.chosen_id:
+                self.decisions.append(
+                    Decision(id=o.premise.id, statement=o.premise.statement,
+                             why=syn.rationale or o.result.summary)
+                )
+            else:
+                self.discarded.append(
+                    {"what": o.premise.statement,
+                     "why": reject_why.get(o.premise.id, "synthesis 에서 미채택")}
+                )
+            self.artifacts.extend(o.result.artifacts)
+        self.syntheses.append({
+            "request": request,
+            "chosen": syn.chosen_id,
+            "rationale": syn.rationale,
+            "rejected": syn.rejected,
+            "grafts": syn.grafts,
+        })
+        self._cap()
+
     def _cap(self) -> None:
         """리스트가 상한을 넘으면 가장 오래된 항목부터 잘라낸다."""
         if self.max_items and self.max_items > 0:
@@ -74,6 +112,7 @@ class Handoff:
             self.discarded = self.discarded[-self.max_items:]
             self.artifacts = self.artifacts[-self.max_items:]
             self.reports = self.reports[-self.max_items:]
+            self.syntheses = self.syntheses[-self.max_items:]
 
     def save(self, path: str | Path) -> None:
         Path(path).write_text(

@@ -3,7 +3,7 @@ import os
 import subprocess
 from pathlib import Path
 
-from teamlead.adapters.isolation import is_git_repo, worktree
+from sophia.adapters.isolation import is_git_repo, worktree
 
 
 def _init_repo(path: Path) -> str:

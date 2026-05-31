@@ -20,10 +20,14 @@ import time
 from dataclasses import dataclass, field
 from typing import Awaitable, Callable
 
+from ...ports.notifier import Notifier
+from ...ports.resource import ResourceGovernor
 from ...ports.retriever import Retriever
 from ...ports.thinker import Thinker
 from ...ports.worker import WorkerBackend, WorkResult, WorkSpec
+from ..manager.anticipation import anticipate
 from ..manager.director import Director
+from ..manager.synthesis import synthesize
 from ..manager.premise import (
     Premise,
     PremiseOutcome,
@@ -49,6 +53,15 @@ class Scheduler:
     premise_count: int = 3
     pending_requests: list[str] = field(default_factory=list)
     resume: bool = False  # True 면 기존 handoff_path 를 읽어 이어간다
+    governor: ResourceGovernor | None = None  # 있으면 부하로 동시성 조절
+    notifier: Notifier | None = None  # 있으면 보고를 이메일 등으로 전달
+    # 반응 시뮬레이션(anticipation): 보고 후 회신을 기다리며 선제 작업을 만든다.
+    anticipate: bool = False
+    anticipation_width: int = 2        # 보고당 예측 선제 작업 수
+    max_speculative: int = 20          # 6h 폭주 방지: 누적 선제 작업 상한
+    speculative_requests: list[str] = field(default_factory=list)
+    # synthesis: 성공한 전제 갈래가 2개 이상이면 승자 하나를 골라 나머지는 기각한다.
+    synthesize: bool = False
     clock: Callable[[], float] = time.monotonic
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep
 
@@ -78,9 +91,11 @@ class Scheduler:
                 break  # 데드라인 초과 → 진행 중 작업을 끊고 종료
 
             ho.pending_requests = list(self.pending_requests)  # 재시작 대비 큐 영속
+            ho.speculative_requests = list(self.speculative_requests)
             self._safe_save(ho)
 
         ho.pending_requests = list(self.pending_requests)
+        ho.speculative_requests = list(self.speculative_requests)
         ho.status = "done" if not self.pending_requests else "in_progress"
         ho.next_action = self.pending_requests[0] if self.pending_requests else ""
         self._safe_save(ho)
@@ -109,6 +124,8 @@ class Scheduler:
         # caller 가 큐를 명시하지 않았으면 이전 미완료 큐를 복원
         if not self.pending_requests and prev.pending_requests:
             self.pending_requests = list(prev.pending_requests)
+        if not self.speculative_requests and getattr(prev, "speculative_requests", None):
+            self.speculative_requests = list(prev.speculative_requests)
         return fresh
 
     def _load_prev(self) -> Handoff | None:
@@ -122,9 +139,19 @@ class Scheduler:
         return None
 
     async def _cycle(self, ho: Handoff, report) -> None:
-        """한 사이클의 본 작업. run() 이 데드라인(wait_for)으로 감싼다."""
+        """한 사이클의 본 작업. run() 이 데드라인(wait_for)으로 감싼다.
+
+        우선순위: 실제 요청 → 예측(선제) 작업 → 자가 과업 → 큐 보충.
+        실제 요청은 보고 후 예측을 낳고(depth-1), 예측 작업은 또 예측하지 않는다.
+        """
         if self.pending_requests:
-            await self._explore(self.pending_requests.pop(0), ho, report)
+            await self._explore(
+                self.pending_requests.pop(0), ho, report, speculative=False
+            )
+        elif self.speculative_requests:
+            await self._explore(
+                self.speculative_requests.pop(0), ho, report, speculative=True
+            )
         elif (spec := self.director.next_task()) is not None:
             await self._single(spec, ho, report)
         else:
@@ -140,11 +167,20 @@ class Scheduler:
                 ho.add_report(msg, at=self.clock() - start)  # 영속화(상대 경과초)
             except Exception:
                 pass
+            if self.notifier is not None:  # 이메일 등으로 전달(설정 시)
+                try:
+                    self.notifier.send(self._report_subject(), msg)
+                except Exception:
+                    pass
             try:
                 report(msg)  # 사용자 콜백(stdout 등)
             except Exception:
                 pass  # 보고 출력 실패로 루프를 멈추지 않는다
         return wrapped
+
+    def _report_subject(self) -> str:
+        g = (self.goal or "").strip().replace("\n", " ")
+        return f"[SOPHIA] {g[:60]}" if g else "[SOPHIA] 보고"
 
     def _safe_save(self, ho: Handoff) -> None:
         try:
@@ -152,8 +188,11 @@ class Scheduler:
         except OSError:
             pass  # 디스크 문제로 6h 루프를 죽이지 않는다
 
-    async def _explore(self, request: str, ho: Handoff, report) -> None:
-        """사용자 요청 → 전제 병렬 탐색."""
+    async def _explore(
+        self, request: str, ho: Handoff, report, speculative: bool = False
+    ) -> None:
+        """사용자 요청 → 전제 병렬 탐색. speculative=True 면 예측에서 파생된
+        선제 작업이라 추가 예측을 낳지 않는다(depth-1)."""
         context = ""
         if self.retriever is not None:
             try:
@@ -163,8 +202,27 @@ class Scheduler:
                 context = ""
 
         premises = await derive_premises(request, self.thinker, self.premise_count)
-        outcomes = await dispatch_parallel(premises, self.backend, context=context)
-        ho.absorb(outcomes)
+        # 리소스 거버너가 있으면 현재 부하로 동시 실행 수를 조인다(없으면 전부 동시).
+        max_conc = None
+        if self.governor is not None:
+            try:
+                max_conc = self.governor.concurrency(len(premises) or 1)
+            except Exception:
+                max_conc = None
+        outcomes = await dispatch_parallel(
+            premises, self.backend, context=context, max_concurrency=max_conc
+        )
+        # synthesis: 성공 갈래가 2개+ 면 승자 하나 채택·나머지 기각. 아니면 기존 흡수.
+        syn = None
+        if self.synthesize:
+            try:
+                syn = await synthesize(request, outcomes, self.thinker)
+            except Exception:
+                syn = None
+        if syn is not None:
+            ho.absorb_with_synthesis(request, outcomes, syn)
+        else:
+            ho.absorb(outcomes)
 
         if self.retriever is not None:
             for o in outcomes:
@@ -175,7 +233,25 @@ class Scheduler:
                     )
                 except Exception:
                     pass
-        report(await to_premise_report(outcomes, self.thinker))
+        summary = await to_premise_report(outcomes, self.thinker)
+        report(summary)
+
+        # 실제 요청의 보고 후에만(예측의 예측 금지) 반응을 예측해 선제 작업을 큐에 쌓는다.
+        if self.anticipate and not speculative:
+            await self._anticipate(summary, ho)
+
+    async def _anticipate(self, report_summary: str, ho: Handoff) -> None:
+        """보고에 대한 예상 반응 → 선제 작업 생성. 상한까지만 큐에 추가."""
+        room = self.max_speculative - len(self.speculative_requests)
+        if room <= 0:
+            return
+        try:
+            tasks = await anticipate(
+                report_summary, self.goal, self.thinker, self.anticipation_width
+            )
+        except Exception:
+            tasks = []
+        self.speculative_requests.extend(tasks[:room])
 
     async def _single(self, spec: WorkSpec, ho: Handoff, report) -> None:
         """자가 과업 단건 실행."""

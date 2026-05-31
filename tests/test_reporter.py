@@ -1,9 +1,9 @@
 import asyncio
 
-from teamlead.adapters.thinker.fake import FakeThinker
-from teamlead.core.manager.premise import Premise, PremiseOutcome
-from teamlead.core.manager.reporter import _cap_sentences, to_premise_report
-from teamlead.ports.worker import WorkResult
+from sophia.adapters.thinker.fake import FakeThinker
+from sophia.core.manager.premise import Premise, PremiseOutcome
+from sophia.core.manager.reporter import _cap_sentences, to_premise_report
+from sophia.ports.worker import WorkResult
 
 
 def test_cap_sentences_enforces_under_five():
@@ -32,7 +32,7 @@ def test_cap_sentences_runaway_no_punctuation_char_budget():
 
 
 def test_surface_insight_also_capped():
-    from teamlead.core.manager.reporter import surface_insight
+    from sophia.core.manager.reporter import surface_insight
     long = "하나다. 둘이다. 셋이다. 넷이다. 다섯이다. 여섯이다."
     out = surface_insight(long)
     assert out.count(".") <= 4  # 인사이트도 5문장 게이트 통과

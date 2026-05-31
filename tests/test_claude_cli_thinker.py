@@ -1,6 +1,6 @@
 import asyncio
 
-from teamlead.adapters.thinker.claude_cli import ClaudeCliThinker
+from sophia.adapters.thinker.claude_cli import ClaudeCliThinker
 
 
 def test_missing_binary_raises():
@@ -63,5 +63,5 @@ def test_compose_appends_schema_when_present():
 
 
 def test_implements_thinker_port():
-    from teamlead.ports.thinker import Thinker
+    from sophia.ports.thinker import Thinker
     assert isinstance(ClaudeCliThinker(), Thinker)

@@ -1,5 +1,5 @@
 [project]
-name = "teamlead"
+name = "sophia"
 version = "0.0.1"
 description = "Claude Code 위에서 도는 중간관리자 하네스: 능동 방향설정, 전제공간 탐색, 저부하 보고."
 requires-python = ">=3.11"
@@ -11,7 +11,7 @@ retrieval = ["sentence-transformers", "sqlite-vec"]
 dev = ["pytest", "pytest-asyncio"]
 
 [project.scripts]
-teamlead = "teamlead.__main__:main"
+sophia = "sophia.__main__:main"
 
 [build-system]
 requires = ["hatchling"]

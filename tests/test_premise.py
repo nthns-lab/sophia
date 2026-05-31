@@ -1,8 +1,8 @@
 import asyncio
 
-from teamlead.adapters.fake_worker import FakeWorkerBackend
-from teamlead.adapters.thinker.fake import FakeThinker
-from teamlead.core.manager.premise import derive_premises, dispatch_parallel
+from sophia.adapters.fake_worker import FakeWorkerBackend
+from sophia.adapters.thinker.fake import FakeThinker
+from sophia.core.manager.premise import derive_premises, dispatch_parallel
 
 
 def test_derive_premises_parses_thinker_output():
@@ -26,7 +26,7 @@ def test_derive_premises_falls_back_to_single():
 
 
 def test_dispatch_parallel_runs_all_and_isolates_failure():
-    from teamlead.core.manager.premise import Premise
+    from sophia.core.manager.premise import Premise
 
     backend = FakeWorkerBackend(fail_on={"b"})
     premises = [Premise("a", "A"), Premise("b", "B"), Premise("c", "C")]

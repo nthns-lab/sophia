@@ -2,7 +2,7 @@
 
 두 층의 프롬프트가 있다:
 - WORKER_*  : 일꾼(Claude Code/Codex)에게 위임하는 작업 지시
-- 관리자(SYSTEM_MANAGER 등): teamlead 자신의 메타인지(전제 도출/보고 압축/자가과업)
+- 관리자(SYSTEM_MANAGER 등): sophia 자신의 메타인지(전제 도출/보고 압축/자가과업)
 백엔드별 미세조정이 필요하면 variants 로 분기 (Claude vs GPT 프롬프팅 차이).
 """
 
@@ -53,6 +53,66 @@ REPORT_COMPRESS = (
     "'무엇을 전제로 했고 / 결과가 어땠고 / 무엇을 버렸는지'가 드러나되 장황하지 않게.\n\n"
     "결과:\n{results}"
 )
+
+# 여러 전제 결과 → 승자 선택 + 나머지 기각 사유 (synthesis = 관리자의 핵심 결정)
+SYNTHESIZE = (
+    "원래 요청을 위해 서로 다른 전제로 병렬 실행한 결과가 아래에 있다. 관리자로서 "
+    "'어느 전제를 채택할지' 하나를 고르고, 나머지는 왜 버리는지 밝혀라. 가능하면 "
+    "버린 전제에서도 채택안에 보탤 좋은 점(graft)이 있으면 챙겨라.\n\n"
+    "원래 요청: {request}\n\n전제별 결과:\n{results}"
+)
+
+SYNTHESIZE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "chosen_id": {"type": "string", "description": "채택한 전제의 id"},
+        "rationale": {"type": "string", "description": "왜 이 전제를 채택했는지"},
+        "rejected": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string"},
+                    "why": {"type": "string", "description": "이 전제를 버린 이유"},
+                },
+                "required": ["id", "why"],
+            },
+        },
+        "grafts": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "버린 전제에서 채택안에 보탤 좋은 점(있으면)",
+        },
+    },
+    "required": ["chosen_id", "rationale", "rejected"],
+}
+
+# 보고 후 → 사용자 반응 예측 → 선제 작업 (anticipation)
+ANTICIPATE = (
+    "방금 본부장에게 아래 보고를 올렸다. 회신을 기다리는 동안 놀지 않는다.\n"
+    "본부장이 이 보고에 '어떻게 반응할지' 가능한 시나리오를 예측하고, 각 반응에 대비해 "
+    "미리 해두면 좋을 선제 작업을 {n}개 제안하라. 사람은 두 번 일하기를 싫어하지만 너는 "
+    "아니다 — 회신이 오기 전에 미리 해둘 수 있는 구체적 작업이어야 한다.\n\n"
+    "진행 중 목표: {goal}\n올린 보고:\n{report}"
+)
+
+ANTICIPATE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "anticipations": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "reaction": {"type": "string", "description": "예상되는 본부장 반응"},
+                    "preemptive_task": {"type": "string", "description": "그에 대비한 선제 작업(구체적 지시문)"},
+                },
+                "required": ["reaction", "preemptive_task"],
+            },
+        }
+    },
+    "required": ["anticipations"],
+}
 
 # idle → 자가 과업 제안
 IDLE_PROPOSE = (

@@ -1,4 +1,4 @@
-from teamlead.adapters.artifacts import artifacts_from_tool_uses
+from sophia.adapters.artifacts import artifacts_from_tool_uses
 
 
 def test_extracts_write_and_edit():

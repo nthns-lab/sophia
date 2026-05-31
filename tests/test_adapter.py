@@ -1,7 +1,7 @@
 import asyncio
 
-from teamlead.adapters.claude_code.adapter import ClaudeCodeBackend
-from teamlead.ports.worker import WorkSpec
+from sophia.adapters.claude_code.adapter import ClaudeCodeBackend
+from sophia.ports.worker import WorkSpec
 
 
 def test_missing_binary_returns_not_ok():

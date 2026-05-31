@@ -10,10 +10,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from teamlead.adapters.fake_worker import FakeWorkerBackend  # noqa: E402
-from teamlead.adapters.thinker.fake import FakeThinker  # noqa: E402
-from teamlead.core.loop.scheduler import Scheduler  # noqa: E402
-from teamlead.core.manager.director import Director  # noqa: E402
+from sophia.adapters.fake_worker import FakeWorkerBackend  # noqa: E402
+from sophia.adapters.thinker.fake import FakeThinker  # noqa: E402
+from sophia.core.loop.scheduler import Scheduler  # noqa: E402
+from sophia.core.manager.director import Director  # noqa: E402
 
 
 async def _noop(_):
@@ -30,7 +30,7 @@ def main() -> int:
         "세 전제로 병렬 진행해 모두 완료, 확장성안은 보류 후보입니다.",
     ])
     backend = FakeWorkerBackend(fail_on={"C"})
-    out_path = "/tmp/teamlead_smoke_handoff.json"
+    out_path = "/tmp/sophia_smoke_handoff.json"
     sched = Scheduler(
         backend=backend,
         director=Director(goal="중간관리자 하네스를 만든다"),

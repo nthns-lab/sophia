@@ -46,9 +46,16 @@ async def derive_premises(request: str, thinker: Thinker, n: int = 3) -> list[Pr
 
 
 async def dispatch_parallel(
-    premises: list[Premise], backend: WorkerBackend, context: str = ""
+    premises: list[Premise],
+    backend: WorkerBackend,
+    context: str = "",
+    max_concurrency: int | None = None,
 ) -> list[PremiseOutcome]:
-    """전제마다 독립 일꾼으로 병렬 실행. 한 전제가 터져도 나머지는 진행."""
+    """전제마다 독립 일꾼으로 병렬 실행. 한 전제가 터져도 나머지는 진행.
+
+    max_concurrency 를 주면 세마포어로 동시 실행 수를 묶는다(리소스 거버너가 정함).
+    None 이면 전부 동시.
+    """
     specs = [
         WorkSpec(
             instruction=templates.WORKER_PREMISE.format(premise=p.statement),
@@ -58,8 +65,19 @@ async def dispatch_parallel(
         )
         for p in premises
     ]
+
+    if max_concurrency is not None and max_concurrency >= 1:
+        sem = asyncio.Semaphore(max_concurrency)
+
+        async def _run(s):
+            async with sem:
+                return await backend.run(s)
+    else:
+        async def _run(s):
+            return await backend.run(s)
+
     results = await asyncio.gather(
-        *(backend.run(s) for s in specs), return_exceptions=True
+        *(_run(s) for s in specs), return_exceptions=True
     )
     outcomes: list[PremiseOutcome] = []
     for p, r in zip(premises, results):

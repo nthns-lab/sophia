@@ -1,7 +1,7 @@
 import asyncio
 
-from teamlead.adapters.thinker.fake import FakeThinker
-from teamlead.core.manager.director import MAX_RESEARCH_QUEUE, Director
+from sophia.adapters.thinker.fake import FakeThinker
+from sophia.core.manager.director import MAX_RESEARCH_QUEUE, Director
 
 
 def test_monitor_targets_rotate_round_robin():
